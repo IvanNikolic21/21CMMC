@@ -64,38 +64,55 @@ def tau_e(zstart, zend, z_array, x_array, length): #integration of the previous 
     return Sigma_T*( (N_b0+He_No)*prehelium + N_b0*posthelium )
 
 
-def Proj_array(index, density, velocity, xH,redshifts,distance,BOX_LEN,HII_DIM,PARALLEL_APPROX=False, dtau_3d=None, rotation=True):
+def Proj_array(z, density, velocity, xH,distance,BOX_LEN,HII_DIM,PARALLEL_APPROX=False, rotation=True):
+    """
+    Takes the lightcone data and compute a kSZ map for a given box
+    
+    Should not be accessed directly, do_kSZ calls the function itself.
+    
+    Parameters
+    ----------
+    z : float
+        The starting redshift of the box
+    density : array of floats of shape (HII_DIM,HII_DIM,HII_DIM)
+        Density file
+    velocity : array of floats of shape (HII_DIM,HII_DIM,HII_DIM)
+        Velocity file
+    xH : array of floats of shape (HII_DIM, HII_DIM, HII_DIM)
+        xH box
+    distance : float
+        distance to the start of the given box in Mpc
+    BOX_LEN : int
+        Length of each side of the box in Mpc
+    HII_DIM : int
+        Size of each of the boxes
+    PARALLEL_APPROX : bool, optional
+        Whether to use the parallel approximation to calculate the kSZ power spectrum, default is false
+    rotation : bool optional
+        Whether to rotate the lightcone boxes, default is True
+        
+    note:
+        This function is useful for rotating the boxes and for easy use with v2. 21cmFAST
+    """
+    
     xi=1-xH
-    #print("Step{}".format( index))
-    tx = int((HII_DIM*random.random()))  # //Put in your favorite random # generator if you like such as ran1(&idum) in numerical recipes
+    tx = int((HII_DIM*random.random()))  # //Put in your favorite random # generator
     ty = int((HII_DIM*random.random()))
-    global Tcmb, Tcmb_3d, DA_zstart, taue_arry, mean_taue_curr_z #comoving distance to the starting redshift   ne treba se uvijek pozivat, možeš stavit u glavni modul
-    DA_zstartcurrbox = distance #comoving distance to the redshift with the given index
-    currZ = redshifts[index]    #current redshift
+    global Tcmb, DA_zstart, taue_arry
+    DA_zstartcurrbox = distance #comoving distance to the starting redshift
+    currZ = float(z)    #current redshift
 #    velocity *= CMperMPC/C
     Tcmb_3d= velocity*xi*(1.0+density)   #this is used for tcmb contribution
     dtau_3d=  N_b0*(1.0+density)*xi*Sigma_T*CMperMPC*BOX_LEN/HII_DIM  #this is used for tau_e contribution
-    #new_dtau=np.zeros((HII_DIM,HII_DIM))  #these will be used to transform according to the line of sight
-    #new_tcmb=np.zeros((HII_DIM,HII_DIM))
+
 
     for k in range(HII_DIM):
-
-    #        print(tx,ty)
         inc = (k*dR + DA_zstartcurrbox) / DA_zstart  #increment for ray tracing
         dz = - dR * CMperMPC / drdz(currZ) #redshift increment for ray tracing
         currZ += dz #current redshift increment
         dtau_3d_new=dtau_3d.T[k].T*(1+currZ)**2 #tcmb and tau_e contribution with appropriate redshift dependecies
         Tcmb_3d_new=A*(1+currZ)*Tcmb_3d.T[k].T
-        #for i in range(HII_DIM):
-         #   for j in range(HII_DIM):
-          #      ii = (int( ((i+.5)*inc))) % HII_DIM
-           #     jj = (int( ((j+.5)*inc))) % HII_DIM
-            #    new_dtau[i][j]=dtau_3d_new[ii][jj]
-             #   new_tcmb[i][j]=Tcmb_3d_new[ii][jj]
-        #new_dtau=[[dtau_3d_new[(int( ((i+.5)*inc))) % HII_DIM][(int( ((j+.5)*inc))) % HII_DIM] for i in range(HII_DIM)] for j in range(HII_DIM)]
-        #new_tcmb=[[Tcmb_3d_new[(int( ((i+.5)*inc))) % HII_DIM][(int( ((j+.5)*inc))) % HII_DIM] for i in range(HII_DIM)] for j in range(HII_DIM)]
-        #new_dtau_arry=np.array(new_dtau)
-        #new_tcmb_arry=np.array(new_tcmb)
+
         if (PARALLEL_APPROX):
             new_dtau=dtau_3d_new
             new_tcmb=Tcmb_3d_new
@@ -120,9 +137,7 @@ def Proj_array(index, density, velocity, xH,redshifts,distance,BOX_LEN,HII_DIM,P
         taue_arry+=new_dtau  #tau_e updating
         Tcmb_factor=new_tcmb*np.exp(-taue_arry) #tcmb contribution with tau_e taken in account
         Tcmb+=Tcmb_factor # tcmb contribution addition
-#        means.append(powpow(Tcmb_factor*10**12,'/ocean/cosmo/ivan.nikolic/21cm_smaller_runs/400Mpc_1991/lightcone_distances.bin',400,4.9)[1][26] )
-#        Tcmb-=np.mean(Tcmb)
-    #print("redshift of the next redshift and the last redshift of the current box", redshifts[index], currZ)
+
     mean_taue_curr_z =np.mean(taue_arry)
     Tcmb=subtract_average(Tcmb)
 
@@ -145,50 +160,37 @@ class kSZ_output:
 
 def do_kSZ(lc,
              z_start = None,
-             z_end = None,
     PARALLEL_APPROX=False, rotation=True, random_seed=None):
     """
-    This is the main module of the program.
-    Parameters:
+    This is the main module of the program. It takes the lightcone and calculates the kSZ power spectrum.
+    Parameters
     
-        - HII_DIM: number of indices in one direction
-        - BOX_LEN: size of the simulation in Mpc
-        - folder: folder name where everything is
-        - z_start(optional): starting redshift for kSZ calculation, default is 5
-        - z_end(optional): ending redshift for kSZ calculation, default is 15
-        - cosmo_params(optinal): cosmological parameters used in the simulation, default are the one fgiven by 21cmFAST
-        - user_params(optional): user parameters used in the simulation, default are the one fgiven by 21cmFAST
-        - PARALLEL_APPROX (optional): flag for parrallel approximation, if True, parallel approximation is taken which is much quicker, but more approximate. D
-                                Default: False
-        - rotation(optional): flag for rotation of boxes, if True boxes are shifted for every HII_DIM, which is the size of the simulation. Default: True
+    ---------
+    lightcone : LightCone object
+        LightCone object for which the kSZ power spectrum is calculated.
+    z_start: float, optional
+        starting redshift for kSZ calculation, default is 5
+    PARALLEL_APPROX : bool, optional
+        flag for parrallel approximation, Default: False
+    rotation : bool, optional
+        flag for rotation of boxes, if True boxes are shifted for every HII_DIM. Default: True
+    
     Returns:
-        kSZ_output with 
-            KSZ_box: map of the kSZ effect, in Kelvins
-            taue_boxp: map of the optical depth
+    ----------
+    l_s : array of floats
+        multiple moments sampled by the power spectrum
+    P_k: array of floats
+        normalized power spectrum of the power spectrum defined as: l(l+1)/2*pi *C_l [\microK^2]
+    errs: array of floats:
+        normalized cosmic variance errors of the power spectrum
+        
         
     Notes: 
-        The function takes the cosmological quantities used in the lightcone when applicable.
+        Parallel approximation is not needed since it doesn't speed up the calculation significantly.
+        do_kSZ splits the lightcone into cubes of shape (HII_DIM**3) so that the rotation is implied consistently
+        and that v2. 21cmFAST can be implemented easier.
     """
-    #HII_DIM=int(HII_DIM)
-    #BOX_LEN=int(BOX_LEN)
-    #random.seed(random_seed)
-    #if cosmo_params==None:
-    #    cosmo_params = (p21c.CosmoParams._defaults_)  #setting default paramaters
-    #if user_params==None:
-    #    user_params=(p21c.UserParams._defaults_)
-    #if z_start==None: #setting default redshifts
-    #    z_start=5
-    #else:
-    #    z_start=float(z_start)
-    #if z_end==None:
-    #    z_end=15
-    #else:
-    #    z_end=float(z_end)
-    #filename_d=folder+'/lightcone_density.bin'   #setting filenames to read in the data
-    #filename_z=folder+'/lightcone_redshifts.bin'
-    #filename_v=folder+'/lightcone_velocity.bin'
-    #filename_dist=folder+'/lightcone_distances.bin'
-    #filename_x=folder+'/lightcone_xH_box.bin'
+
     global HII_DIM, BOX_LEN
     BOX_LEN=int(lc.user_params.BOX_LEN)
     HII_DIM=int(lc.user_params.HII_DIM)
@@ -196,16 +198,7 @@ def do_kSZ(lc,
         z_start=float(z_start)
     else:
         z_start=lc.lightcone_redshifts[-1]
-    global means
-    means=[]
-    #lc_z=np.fromfile(filename_z, dtype='float64') #getting redshifts for data
-    #global red_dist
-    #red_dist=len(lc_z)  #red_dist is the amount of redshift slices
-    #print(filename_d)
-   #lc_d=np.fromfile(filename_d, dtype='float32').reshape(HII_DIM,HII_DIM, red_dist)
-    #lc_v=np.fromfile(filename_v, dtype='float32').reshape(HII_DIM,HII_DIM, red_dist)
-    #lc_dist=np.fromfile(filename_dist, dtype='float64')
-    #lc_x=np.fromfile(filename_x, dtype='float32').reshape(HII_DIM,HII_DIM, red_dist)
+
     global START_REDSHIFT, OMm, OMl, He_No, No, OMb, N_b0, hlittle, Ho, RHOcrit_cgs, taue_arry, Tcmb
     hlittle= lc.cosmo_params.hlittle ##taking normalized Hubble parameter from the lightcone
     OMm=lc.cosmo_params.OMm ## taking matter density parameter from the lightcone
@@ -247,37 +240,39 @@ def do_kSZ(lc,
     global DA_zstart
     DA_zstart = lc.lightcone_distances[0] #distance to the first slice
     distances=[lc.lightcone_distances[i*HII_DIM] for i in range(amount+1)]
-   # start = time.time()
-    #print("Number of steps {}".format(amount))
     for i,z in enumerate(redshifts_xe_sorted):
-        Proj_array(i,density_boxes_sorted[i], velocity_boxes_sorted[i], xH_boxes_sorted[i], redshifts_xe_sorted,distances[i], BOX_LEN,HII_DIM,PARALLEL_APPROX=PARALLEL_APPROX, rotation=rotation)
+        Proj_array(z,density_boxes_sorted[i], velocity_boxes_sorted[i], xH_boxes_sorted[i],distances[i], BOX_LEN,HII_DIM,PARALLEL_APPROX=PARALLEL_APPROX, rotation=rotation)
 
-     #   if (i==0):
-     #       end = time.time()
-     #       print("Estimated time in min:{}".format((end - start)*len(redshifts_xe_sorted)/60))
+
     
     l_s, P_k,errs = powpow(Tcmb*CMperMPC/C*10**6*cosmo.Tcmb0.value,     distances[0], BOX_LEN, redshifts_xe_sorted[0])
-    #with open('kSZ_power.npy', 'wb') as f:
-    #    np.save(f, np.array(l_s))
-    #    np.save(f, np.array(P_k)*cosmo.Tcmb0.value**2)
+
     
     return l_s,P_k,errs
 
 def powpow(box, distance,BOX_LEN, redshifts=5):  #calculation of the power spectrum
     """
     calculation of the power spectrum of the box
-    Input:
-        Box: This is the array for which power spectrum is calculated
-        filename_dist: fielanem to distance lightcone to correctly calculate the dipole moment
-        BOX_LEN: Box length in megaparsecs
-        HII_DIM: dimension of one spatial dimension
+    
+    Parameters:
+    ----------
+    Box: array of shape (HII_DIM**2)
+        This is the array for which power spectrum is calculated
+    distance : float
+        Distance to the start of the lightcone
+    BOX_LEN: int
+        Box length in megaparsecs
+    redshifts: float, optinal
+        Redshift of the start of the lightcone, default is 5
         
-    Output:
-        l_s: these are the multiple moments
-        P_K: power spectrum for multiple moments defined in l_s
-        
-    Might implement it later in the kSZ_power, so far it takes BOX_LEN from that module which is not optimal.
-    Also, needs to be corrected
+    Returns:
+    ----------
+    l_s : array of floats
+        multiple moments sampled by the power spectrum
+    P_k: array of floats
+        normalized power spectrum of the power spectrum defined as: l(l+1)/2*pi *C_l [\microK^2]
+    errs: array of floats:
+        normalized cosmic variance errors of the power spectrum
     """
     dimension=box.shape[0]
     HII_DIM=dimension
@@ -306,7 +301,9 @@ def powpow(box, distance,BOX_LEN, redshifts=5):  #calculation of the power spect
     l_s,Power,errs=print_stat(Pk, K, Count, dimension, redshifts, distance)
     return l_s,Power,errs
             
-def print_stat(P_k,K,Count, dimension, redshifts, distance): ##function that calculates the cosmologically normalized power spectrum from the pure power spectrum
+def print_stat(P_k,K,Count, dimension, redshifts, distance): 
+    """function that calculates the cosmologically normalized power spectrum from the pure power spectrum
+    """
     x = distance
     l_s=[]
     Power=[]
@@ -329,5 +326,5 @@ def knum(HII_DIM,i):
     else:
         return -(HII_DIM/2 - i)
 
-if __name__ == '__main__':
-    do_kSZ(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])#, sys.argv[5])#, sys.argv[6])#, sys.argv[7], sys.argv[8], sys.argv[9], sys.argv[10], sys.argv[11])
+#if __name__ == '__main__':
+#    do_kSZ(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])#, sys.argv[5])#, sys.argv[6])#, sys.argv[7], sys.argv[8], sys.argv[9], sys.argv[10], sys.argv[11])
