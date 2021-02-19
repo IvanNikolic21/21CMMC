@@ -9,6 +9,7 @@ from py21cmfast import wrapper as lib
 from scipy.interpolate import InterpolatedUnivariateSpline
 
 from . import core
+from . import kSZ_power
 
 logger = logging.getLogger("21cmFAST")
 
@@ -1318,3 +1319,39 @@ class LikelihoodEDGES(LikelihoodBaseFile):
             return -0.5 * np.square(
                 (model["freq_tb_min"] - self.freq_edges) / self.freq_err_edges
             )
+
+class LikelihoodkSZ (LikelihoodBaseFile):
+    """
+    Chi^2 likelihood of the kSZ signal according to the latest SPT patchy kSZ signal detection.
+    """
+    
+    required_cores = (core.CorekSZModule,)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.P_k_SPT=1.1
+        self.err_SPT=0.7
+        self.z_start=5
+    def setup(self):
+        super().setup()
+        
+    def reduce_data(self, ctx):
+        #l_s, p_k, errs = do_kSZ(ctx.get("lightcone"), self.z_start)
+        #P_k_sm=[np.mean(p_k[i-4:i+4]) for i in range(4,len(p_k)-4, 8)]
+        #L_s_sm=[np.mean(l_s[i-4:i+4]) for i in range(4,len(l_s)-4, 8)]
+        #errs_sm=[np.mean(errs[i-4:i+4]) for i in range(4,len(errs)-4, 8)]
+        #i=np.argmin((np.abs(np.array(L_s_sm)-3000)))
+        #L_s_3000=L_s_sm[i]
+        #P_k_3000=P_k_sm[i]
+        #errs_3000=errs_sm[i]
+
+
+        L_s_3000= ctx.get("L_s_3000")
+        P_k_3000= ctx.get("P_k_3000")
+        errs_3000= ctx.get("errs_3000")
+        return [{"P_k_3000":P_k_3000, "errs_3000":errs_3000}]
+    
+    def computeLikelihood(self, model):
+        return -((model[0]["P_k_3000"] - self.P_k_SPT)**2 / (self.err_SPT ** 2 + model[0]["errs_3000"] ** 2 ))
+    def store(self, model, storage):
+        for i,m in enumerate(model):
+            storage.update({k:v for k,v in m.items()})

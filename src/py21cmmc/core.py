@@ -11,6 +11,8 @@ import numpy as np
 import py21cmfast as p21
 import warnings
 
+from kSZ_power import do_kSZ
+
 from . import _utils as ut
 
 logger = logging.getLogger("21cmFAST")
@@ -504,6 +506,7 @@ class CoreLightConeModule(CoreCoevalModule):
             all(p not in self.cosmo_params.self.keys() for p in self.parameter_names)
             and not self.change_seed_every_iter
         ):
+            lightcone_quantities=('brightness_temp','xH_box',"density", "velocity")
             logger.info("Initializing default boxes for the entire chain.")
             lightcone = p21.run_lightcone(
                 redshift=self.redshift[0],
@@ -513,6 +516,7 @@ class CoreLightConeModule(CoreCoevalModule):
                 astro_params=self.astro_params,
                 flag_options=self.flag_options,
                 write=True,
+                lightcone_quantities=lightcone_quantities,
                 regenerate=self.regenerate,
                 direc=self.io_options["cache_dir"],
                 random_seed=self.initial_conditions_seed,
@@ -528,6 +532,7 @@ class CoreLightConeModule(CoreCoevalModule):
         """Compute all data defined by this core and add it to the context."""
         # Update parameters
         astro_params, cosmo_params = self._update_params(ctx.getParams())
+        lightcone_quantities=('brightness_temp','xH_box',"density", "velocity")
 
         # Call C-code
         lightcone = p21.run_lightcone(
@@ -538,6 +543,7 @@ class CoreLightConeModule(CoreCoevalModule):
             cosmo_params=cosmo_params,
             user_params=self.user_params,
             regenerate=False,
+            lightcone_quantities=lightcone_quantities,
             random_seed=self.initial_conditions_seed,
             write=self.io_options["cache_mcmc"],
             direc=self.io_options["cache_dir"],
@@ -639,3 +645,25 @@ class CoreLuminosityFunction(CoreCoevalModule):
             except TypeError:
 
                 lfunc[i] += np.random.normal(loc=0, scale=s, size=len(lfunc[i]))
+
+class CorekSZModule(CoreLightConeModule):
+    def __init__(self, z_start=5, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.z_start=z_start
+        
+    def build_model_data(self,ctx):
+        super().build_model_data(ctx)
+        l_s, p_k, errs = do_kSZ(ctx.get("lightcone"), self.z_start)
+        P_k_sm=[np.mean(p_k[i-4:i+4]) for i in range(4,len(p_k)-4, 8)]
+        L_s_sm=[np.mean(l_s[i-4:i+4]) for i in range(4,len(l_s)-4, 8)]
+        errs_sm=[np.mean(errs[i-4:i+4]) for i in range(4,len(errs)-4, 8)]
+        
+        i=np.argmin((np.abs(np.array(L_s_sm)-3000)))
+        L_s_3000=L_s_sm[i]
+        P_k_3000=P_k_sm[i]
+        errs_3000=errs_sm[i]
+
+        
+        ctx.add("P_k_3000", P_k_3000)
+        ctx.add("L_s_3000", L_s_3000)
+        ctx.add("errs_3000", errs_3000)

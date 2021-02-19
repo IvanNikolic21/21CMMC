@@ -6,6 +6,7 @@ from .core import (
     CoreCoevalModule,
     CoreLightConeModule,
     CoreLuminosityFunction,
+    CorekSZModule,
     NotAChain,
     NotSetupError,
 )
@@ -19,5 +20,6 @@ from .likelihood import (
     LikelihoodLuminosityFunction,
     LikelihoodNeutralFraction,
     LikelihoodPlanck,
+    LikelihoodkSZ
 )
 from .mcmc import build_computation_chain, run_mcmc
