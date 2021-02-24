@@ -1335,23 +1335,27 @@ class LikelihoodkSZ (LikelihoodBaseFile):
         super().setup()
         
     def reduce_data(self, ctx):
-        #l_s, p_k, errs = do_kSZ(ctx.get("lightcone"), self.z_start)
-        #P_k_sm=[np.mean(p_k[i-4:i+4]) for i in range(4,len(p_k)-4, 8)]
-        #L_s_sm=[np.mean(l_s[i-4:i+4]) for i in range(4,len(l_s)-4, 8)]
-        #errs_sm=[np.mean(errs[i-4:i+4]) for i in range(4,len(errs)-4, 8)]
-        #i=np.argmin((np.abs(np.array(L_s_sm)-3000)))
-        #L_s_3000=L_s_sm[i]
-        #P_k_3000=P_k_sm[i]
-        #errs_3000=errs_sm[i]
 
 
         L_s_3000= ctx.get("L_s_3000")
         P_k_3000= ctx.get("P_k_3000")
         errs_3000= ctx.get("errs_3000")
         return [{"P_k_3000":P_k_3000, "errs_3000":errs_3000}]
+   
+   def  lihoodfunc(self,P_k, err):
+        """
+        Likelihood uses a variable Gaussian. See https://arxiv.org/pdf/physics/0406120.pdf for details.
+        """
+        err_upp=np.sqrt(self.err_SPT_upp**2+ err**2)
+        err_low=np.sqrt(self.err_SPT_low**2+ err**2)
+        sigma_a= 2*err_upp*err_low/(err_upp+err_low) 
+        sigma_b=(err_upp-err_low)/(err_upp+err_low)
+        lnL = -1/2*((self.P_k_SPT-P_k)/(sigma_a+sigma_b*(self.P_k_SPT-P_k)))**2
+        return lnL
     
     def computeLikelihood(self, model):
-        return -((model[0]["P_k_3000"] - self.P_k_SPT)**2 / (self.err_SPT ** 2 + model[0]["errs_3000"] ** 2 ))
+        return likelihoodfunc(self, model[0]['P_k_3000'], model[0]['errs_3000'])
+
     def store(self, model, storage):
         for i,m in enumerate(model):
             storage.update({k:v for k,v in m.items()})
