@@ -658,12 +658,12 @@ class CorekSZModule(CoreLightConeModule):
         L_s_sm=[np.mean(l_s[i-4:i+4]) for i in range(4,len(l_s)-4, 8)]
         errs_sm=[np.mean(errs[i-4:i+4]) for i in range(4,len(errs)-4, 8)]
         
-        i=np.argmin((np.abs(np.array(L_s_sm)-3000)))
-        L_s_3000=L_s_sm[i]
-        P_k_3000=P_k_sm[i]
-        errs_3000=errs_sm[i]
+       # i=np.argmin((np.abs(np.array(L_s_sm)-3000)))
+       # L_s_3000=L_s_sm[i]
+       # P_k_3000=P_k_sm[i]
+       # errs_3000=errs_sm[i]
 
         
-        ctx.add("P_k_3000", P_k_3000)
-        ctx.add("L_s_3000", L_s_3000)
-        ctx.add("errs_3000", errs_3000)
+        ctx.add("P_k_sm", P_k_sm)
+        ctx.add("L_s_sm", L_s_sm)
+        ctx.add("errs_sm", errs_sm)

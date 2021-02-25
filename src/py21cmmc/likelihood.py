@@ -1335,12 +1335,12 @@ class LikelihoodkSZ (LikelihoodBaseFile):
         super().setup()
         
     def reduce_data(self, ctx):
+	
+        L_s_sm= ctx.get("L_s_sm")
+        P_k_sm= ctx.get("P_k_sm")
+        errs_sm= ctx.get("errs_sm")
 
-
-        L_s_3000= ctx.get("L_s_3000")
-        P_k_3000= ctx.get("P_k_3000")
-        errs_3000= ctx.get("errs_3000")
-        return [{"P_k_3000":P_k_3000, "errs_3000":errs_3000}]
+        return [{"P_k_sm":P_k_sm,"L_s_sm": L_s_sm, "errs_sm":errs_sm}]
    
    def  lihoodfunc(self,P_k, err):
         """
@@ -1354,7 +1354,14 @@ class LikelihoodkSZ (LikelihoodBaseFile):
         return lnL
     
     def computeLikelihood(self, model):
-        return likelihoodfunc(self, model[0]['P_k_3000'], model[0]['errs_3000'])
+	L_s_sm=model[0]['L_s_sm']
+	P_k_sm=model[0]['P_k_sm']
+	errs_sm=model[0]['errs_sm']
+	i=np.argmin((np.abs(np.array(L_s_sm)-3000)))
+        L_s_3000=L_s_sm[i]
+        P_k_3000=P_k_sm[i]
+        errs_3000=errs_sm[i]
+        return likelihoodfunc(self, P_k_3000, errs_3000)
 
     def store(self, model, storage):
         for i,m in enumerate(model):
